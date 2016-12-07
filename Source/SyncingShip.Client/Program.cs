@@ -1,20 +1,29 @@
 ﻿using System;
+using System.IO;
+using log4net;
+using log4net.Config;
 using SyncingShip.Protocol.Exceptions;
 
 namespace SyncingShip.Client
 {
     class Program
     {
+        private static ILog _log;
+
         static void Main()
         {
             Console.Title = "SyncingShip CLIENT";
-            Console.ForegroundColor = ConsoleColor.White;
+
+            XmlConfigurator.Configure(new FileInfo("log4net.config"));
+            _log = LogManager.GetLogger(typeof(Program));
+
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
 
             ClientService service = new ClientService();
 
             bool canRun = true;
 
-            Console.WriteLine("Client started.\r\nYou can type commands now.\r\n");
+            _log.Info("Client started. You can type commands now.");
 
             while (canRun)
             {
@@ -25,7 +34,14 @@ namespace SyncingShip.Client
                 switch (command)
                 {
                     case "list":
-                        service.ShowList();
+                        try
+                        {
+                            service.ShowList();
+                        }
+                        catch (Exception ex)
+                        {
+                            _log.Error("Failed to show the list.", ex);
+                        }
                         break;
 
                     case "sync":
@@ -35,7 +51,7 @@ namespace SyncingShip.Client
                         }
                         catch (SyncException ex)
                         {
-                            Console.WriteLine("Error {0}: {1}", ex.StatusCode, ex.Message);
+                            _log.Error("Sync error {0}", ex);
                         }
                         break;
 
@@ -44,12 +60,17 @@ namespace SyncingShip.Client
                         break;
 
                     default:
-                        Console.WriteLine("Huh?");
+                        _log.Error("Huh?");
                         break;
                 }
             }
 
-            Console.WriteLine("Client stopped.");
+            _log.Info("Client stopped.");
+        }
+
+        private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs args)
+        {
+            _log.Error("An unhandled exception occured.", args.ExceptionObject as Exception);
         }
     }
 }

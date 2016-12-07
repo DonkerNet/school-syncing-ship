@@ -1,13 +1,22 @@
 ﻿using System;
+using System.IO;
+using log4net;
+using log4net.Config;
 
 namespace SyncingShip.Server
 {
     class Program
     {
+        private static ILog _log;
+
         static void Main(string[] args)
         {
             Console.Title = "SyncingShip SERVER";
-            Console.ForegroundColor = ConsoleColor.White;
+
+            XmlConfigurator.Configure(new FileInfo("log4net.config"));
+            _log = LogManager.GetLogger(typeof(Program));
+
+            AppDomain.CurrentDomain.UnhandledException += CurrentDomainOnUnhandledException;
 
             bool canRun = true;
 
@@ -31,6 +40,11 @@ namespace SyncingShip.Server
             }
 
             service.Stop();
+        }
+
+        private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs args)
+        {
+            _log.Error("An unhandled exception occured.", args.ExceptionObject as Exception);
         }
     }
 }

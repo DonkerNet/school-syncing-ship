@@ -11,6 +11,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncingShip.Server", "Synci
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SyncingShip.Shared", "SyncingShip.Shared\SyncingShip.Shared.csproj", "{09D6E588-B2EA-4089-B3C6-EFBC6BAA034D}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Console Applications", "Console Applications", "{703FD6B7-6223-4202-AACF-0721DABEA796}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,5 +38,9 @@ Global
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{78D3CFBB-19E6-40C5-A250-CBA8587EAAAB} = {703FD6B7-6223-4202-AACF-0721DABEA796}
+		{32C1D60F-9FC0-46A7-A0BC-73BE6B2B242D} = {703FD6B7-6223-4202-AACF-0721DABEA796}
 	EndGlobalSection
 EndGlobal

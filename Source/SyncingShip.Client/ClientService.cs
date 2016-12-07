@@ -1,9 +1,10 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Configuration;
 using System.IO;
 using System.Linq;
 using System.Net;
+using System.Text;
+using log4net;
 using SyncingShip.Client.Entities;
 using SyncingShip.Protocol;
 using SyncingShip.Protocol.Entities;
@@ -16,6 +17,7 @@ namespace SyncingShip.Client
         private readonly FileManager _fileManager;
         private readonly ChecksumManager _checksumManager;
         private readonly SyncClient _client;
+        private readonly ILog _log;
 
         public ClientService()
         {
@@ -26,94 +28,77 @@ namespace SyncingShip.Client
             _client = new SyncClient(
                 IPAddress.Parse(ConfigurationManager.AppSettings["ServerIp"]),
                 int.Parse(ConfigurationManager.AppSettings["ServerPort"]));
+            _log = LogManager.GetLogger(GetType());
         }
 
         public void ShowList()
         {
             SortedFileInfoList sortedFileInfoList = GetSortedFileInfoList();
 
+            StringBuilder logEntryBuilder = new StringBuilder();
+            logEntryBuilder.AppendLine("Listing files.");
+
             // Client file info
 
             if (sortedFileInfoList.ClientNew.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.Green;
-                Console.WriteLine("UNVERSIONED:");
-                foreach (SyncFileInfo newClientFile in sortedFileInfoList.ClientNew)
-                {
-                    Console.WriteLine("  {0}", newClientFile.FileName);
-                }
+                logEntryBuilder.AppendLine("UNVERSIONED:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ClientNew)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             if (sortedFileInfoList.ClientModified.Count > 0 )
             {
-                Console.ForegroundColor = ConsoleColor.Yellow;
-                Console.WriteLine("MODIFIED:");
-                foreach (SyncFileInfo modifiedClientFile in sortedFileInfoList.ClientModified)
-                {
-                    Console.WriteLine("  {0}", modifiedClientFile.FileName);
-                }
+                logEntryBuilder.AppendLine("MODIFIED:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ClientModified)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             if (sortedFileInfoList.ClientDeleted.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("REMOVED:");
-                foreach (SyncFileInfo deletedClientFile in sortedFileInfoList.ClientDeleted)
-                {
-                    Console.WriteLine("  {0}", deletedClientFile.FileName);
-                }
+                logEntryBuilder.AppendLine("REMOVED:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ClientDeleted)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             // Server file info
 
             if (sortedFileInfoList.ServerNew.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.DarkGreen;
-                Console.WriteLine("PENDING:");
-                foreach (SyncFileInfo newServerFile in sortedFileInfoList.ServerNew)
-                {
-                    Console.WriteLine("  {0}", newServerFile.FileName);
-                }
+                logEntryBuilder.AppendLine("PENDING:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ServerNew)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             if (sortedFileInfoList.ServerModified.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.DarkYellow;
-                Console.WriteLine("OUTDATED:");
-                foreach (SyncFileInfo modifiedServerFile in sortedFileInfoList.ServerModified)
-                {
-                    Console.WriteLine("  {0}", modifiedServerFile.FileName);
-                }
+                logEntryBuilder.AppendLine("OUTDATED:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ServerModified)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             if (sortedFileInfoList.ServerDeleted.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.DarkRed;
-                Console.WriteLine("OBSOLETE:");
-                foreach (SyncFileInfo deletedServerFile in sortedFileInfoList.ServerDeleted)
-                {
-                    Console.WriteLine("  {0}", deletedServerFile.FileName);
-                }
+                logEntryBuilder.AppendLine("OBSOLETE:");
+                foreach (SyncFileInfo file in sortedFileInfoList.ServerDeleted)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
             // Other file info
 
             if (sortedFileInfoList.Unmodified.Count > 0)
             {
-                Console.ForegroundColor = ConsoleColor.Gray;
-                Console.WriteLine("UNMODIFIED:");
-                foreach (SyncFileInfo unmodifiedFile in sortedFileInfoList.Unmodified)
-                {
-                    Console.WriteLine("  {0}", unmodifiedFile.FileName);
-                }
+                logEntryBuilder.AppendLine("UNMODIFIED:");
+                foreach (SyncFileInfo file in sortedFileInfoList.Unmodified)
+                    logEntryBuilder.AppendLine("  " + file.FileName);
             }
 
-            Console.ForegroundColor = ConsoleColor.White;
+            _log.Info(logEntryBuilder);
         }
 
         public void PerformSync()
         {
-            Console.WriteLine("File syncing started.");
+            _log.Info("File syncing started.");
 
             SortedFileInfoList sortedFileInfoList = GetSortedFileInfoList();
 
@@ -121,7 +106,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ClientNew.Count > 0)
             {
-                Console.WriteLine("Uploading new files to server...");
+                _log.Info("Uploading new files to server...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ClientNew)
                 {
@@ -132,7 +117,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ClientModified.Count > 0)
             {
-                Console.WriteLine("Uploading modified files to server...");
+                _log.Info("Uploading modified files to server...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ClientModified)
                 {
@@ -144,7 +129,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ClientDeleted.Count > 0)
             {
-                Console.WriteLine("Removing files from server...");
+                _log.Info("Removing files from server...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ClientDeleted)
                 {
@@ -158,7 +143,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ServerNew.Count > 0)
             {
-                Console.WriteLine("Downloading new files from server...");
+                _log.Info("Downloading new files from server...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ServerNew)
                 {
@@ -170,7 +155,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ServerModified.Count > 0)
             {
-                Console.WriteLine("Downloading modified files from server...");
+                _log.Info("Downloading modified files from server...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ServerModified)
                 {
@@ -182,7 +167,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.ServerDeleted.Count > 0)
             {
-                Console.WriteLine("Removing obsolete files...");
+                _log.Info("Removing obsolete files...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.ServerDeleted)
                 {
@@ -195,7 +180,7 @@ namespace SyncingShip.Client
 
             if (sortedFileInfoList.Unmodified.Count > 0)
             {
-                Console.WriteLine("Saving checksums of unmodified files (just to be safe)...");
+                _log.Info("Saving checksums of unmodified files (just to be safe)...");
 
                 foreach (SyncFileInfo fileInfo in sortedFileInfoList.Unmodified)
                 {
@@ -203,7 +188,7 @@ namespace SyncingShip.Client
                 }
             }
 
-            Console.WriteLine("File syncing finished.");
+            _log.Info("File syncing finished.");
         }
 
         private SortedFileInfoList GetSortedFileInfoList()
