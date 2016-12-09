@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Configuration;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using log4net;
@@ -10,7 +10,7 @@ using SyncingShip.Shared;
 
 namespace SyncingShip.Server
 {
-    public class ServerService
+    public class ServerService : IDisposable
     {
         private readonly FileManager _fileManager;
         private readonly ChecksumManager _checksumManager;
@@ -21,30 +21,20 @@ namespace SyncingShip.Server
 
         public ServerService()
         {
-            _fileManager = new FileManager(ConfigurationManager.AppSettings["FileDirectory"]);
-            _checksumManager = new ChecksumManager(
-                ConfigurationManager.AppSettings["FileDirectory"],
-                null);
-            _server = new SyncServer(int.Parse(ConfigurationManager.AppSettings["ServerPort"]));
+            _fileManager = new FileManager(AppConfig.FileDirectory);
+            _checksumManager = new ChecksumManager(AppConfig.FileDirectory, null);
+            _server = new SyncServer(AppConfig.ServerPort);
             _server.ListCallback += ListCallback;
             _server.GetCallback += GetCallback;
             _server.PutCallback += PutCallback;
             _server.DeleteCallback += DeleteCallback;
             _log = LogManager.GetLogger(GetType());
-        }
-
-        public void Start()
-        {
-            _log.Info("Starting server...");
             _server.Start();
-            _log.Info("Server started.");
         }
 
-        public void Stop()
+        public void Dispose()
         {
-            _log.Info("Stopping server...");
             _server.Stop();
-            _log.Info("Server stopped.");
         }
 
         #region Callback methods

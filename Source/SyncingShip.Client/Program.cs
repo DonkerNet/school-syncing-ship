@@ -23,7 +23,7 @@ namespace SyncingShip.Client
 
             bool canRun = true;
 
-            _log.Info("Client started. You can type commands now.");
+            _log.Info("Client started.\r\nType 'list' to see all files and their statuses.\r\nType 'sync' to force synchronization.");
 
             while (canRun)
             {

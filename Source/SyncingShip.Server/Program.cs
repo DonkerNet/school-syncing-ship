@@ -20,26 +20,30 @@ namespace SyncingShip.Server
 
             bool canRun = true;
 
-            ServerService service = new ServerService();
-            service.Start();
+            _log.Info("Starting server...");
 
-            Console.WriteLine("Type 'exit' to... Exit. DUH!\r\n");
-
-            while (canRun)
+            using (new ServerService())
             {
-                string command = Console.ReadLine()?.ToLower();
-                if (string.IsNullOrEmpty(command))
-                    continue;
+                _log.Info("Server started.\r\nType 'exit' to... Exit. DUH!");
 
-                switch (command)
+                while (canRun)
                 {
-                    case "exit":
-                        canRun = false;
-                        break;
-                }
-            }
+                    string command = Console.ReadLine()?.ToLower();
+                    if (string.IsNullOrEmpty(command))
+                        continue;
 
-            service.Stop();
+                    switch (command)
+                    {
+                        case "exit":
+                            canRun = false;
+                            break;
+                    }
+                }
+
+                _log.Info("Stoping server...");
+            }
+            
+            _log.Info("Server stopped.");
         }
 
         private static void CurrentDomainOnUnhandledException(object sender, UnhandledExceptionEventArgs args)

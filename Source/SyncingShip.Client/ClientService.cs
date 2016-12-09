@@ -18,17 +18,35 @@ namespace SyncingShip.Client
         private readonly ChecksumManager _checksumManager;
         private readonly SyncClient _client;
         private readonly ILog _log;
+        private readonly FileSystemWatcher _fileSystemWatcher;
 
         public ClientService()
         {
-            _fileManager = new FileManager(ConfigurationManager.AppSettings["FileDirectory"]);
-            _checksumManager = new ChecksumManager(
-                ConfigurationManager.AppSettings["FileDirectory"],
-                ConfigurationManager.AppSettings["ChecksumDirectory"]);
-            _client = new SyncClient(
-                IPAddress.Parse(ConfigurationManager.AppSettings["ServerIp"]),
-                int.Parse(ConfigurationManager.AppSettings["ServerPort"]));
+            _fileManager = new FileManager(AppConfig.FileDirectory);
+            _checksumManager = new ChecksumManager(AppConfig.FileDirectory, AppConfig.ChecksumDirectory);
+            _client = new SyncClient(AppConfig.ServerIp, AppConfig.ServerPort);
             _log = LogManager.GetLogger(GetType());
+
+            _fileSystemWatcher = new FileSystemWatcher(AppConfig.FileDirectory)
+            {
+                NotifyFilter = NotifyFilters.CreationTime | NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                IncludeSubdirectories = false
+            };
+
+            _fileSystemWatcher.Created += FileSystemWatcherOnChange;
+            _fileSystemWatcher.Changed += FileSystemWatcherOnChange;
+            _fileSystemWatcher.Renamed += FileSystemWatcherOnChange;
+            _fileSystemWatcher.Deleted += FileSystemWatcherOnChange;
+
+            _fileSystemWatcher.EnableRaisingEvents = true;
+        }
+
+        private void FileSystemWatcherOnChange(object sender, FileSystemEventArgs args)
+        {
+            _log.Info("Change in file directory detected.");
+            _fileSystemWatcher.EnableRaisingEvents = false;
+            PerformSync();
+            _fileSystemWatcher.EnableRaisingEvents = true;
         }
 
         public void ShowList()
