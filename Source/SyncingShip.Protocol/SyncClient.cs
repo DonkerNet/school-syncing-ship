@@ -41,7 +41,11 @@ namespace SyncingShip.Protocol
             ListResponseBody responseBody = ParseAndValidateResponse<ListResponseBody>(responseMessage);
 
             return responseBody.files
-                .Select(f => new SyncFileInfo { FileName = f.filename, Checksum = f.checksum })
+                .Select(f => new SyncFileInfo
+                {
+                    FileName = _messageEncoding.GetString(Convert.FromBase64String(f.filename)),
+                    Checksum = f.checksum
+                })
                 .ToList();
         }
 
@@ -57,7 +61,7 @@ namespace SyncingShip.Protocol
 
             GetRequestBody requestBody = new GetRequestBody
             {
-                filename = fileName
+                filename = Convert.ToBase64String(_messageEncoding.GetBytes(fileName))
             };
 
             byte[] requestMessageBytes = CreateRequestMessageBytes(SyncVerbs.Get, requestBody);
@@ -67,7 +71,7 @@ namespace SyncingShip.Protocol
 
             return new SyncFile
             {
-                FileName = fileName,
+                FileName = _messageEncoding.GetString(Convert.FromBase64String(responseBody.filename)),
                 Checksum = responseBody.checksum,
                 Content = Convert.FromBase64String(responseBody.content)
             };
@@ -110,7 +114,7 @@ namespace SyncingShip.Protocol
 
             PutRequestBody requestBody = new PutRequestBody
             {
-                filename = fileName,
+                filename = Convert.ToBase64String(_messageEncoding.GetBytes(fileName)),
                 checksum = checksum,
                 original_checksum = originalChecksum,
                 content = Convert.ToBase64String(contentBytes)
@@ -145,7 +149,7 @@ namespace SyncingShip.Protocol
 
             DeleteRequestBody requestBody = new DeleteRequestBody
             {
-                filename = fileName,
+                filename = Convert.ToBase64String(_messageEncoding.GetBytes(fileName)),
                 checksum = originalChecksum
             };
 
@@ -169,7 +173,7 @@ namespace SyncingShip.Protocol
             }
             else
             {
-                requestMessage = $"{verb} {SyncConstants.ProtocolVersion}";
+                requestMessage = $"{verb} {SyncConstants.ProtocolVersion}\r\n\r\n{{}}";
             }
 
             return _messageEncoding.GetBytes(requestMessage);
@@ -184,10 +188,9 @@ namespace SyncingShip.Protocol
             // Content will first be loaded into memory before being written to a file.
             // Should be fun with very large files!  ;-)
 
-            string responseMessage;
+            StringBuilder responseMessageBuilder = new StringBuilder();
 
             TcpClient client = new TcpClient();
-            client.ReceiveTimeout = 1000; // TODO: Dirty workaround for not knowing the content byte length
 
             try
             {
@@ -198,29 +201,35 @@ namespace SyncingShip.Protocol
                     // Write the request to the stream
                     stream.Write(requestMessageBytes, 0, requestMessageBytes.Length);
 
-                    // Read the response
-                    using (MemoryStream memoryStream = new MemoryStream())
+                    Decoder charDecoder = _messageEncoding.GetDecoder();
+
+                    byte[] buffer = new byte[4];
+                    int bytesRead;
+                    char[] charBuffer = new char[buffer.Length];
+                    int accoladeOpenCount = 0;
+                    int accoladeCloseCount = 0;
+
+                    while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        byte[] buffer = new byte[8192];
-                        int bytesRead;
+                        int charCount = charDecoder.GetChars(buffer, 0, bytesRead, charBuffer, 0);
 
-                        try
+                        if (charCount > 0)
                         {
-                            while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
-                            // THIS BLOCKS IF THERE IS NOTHING TO READ!!! We need to know the byte length of the content!
+                            responseMessageBuilder.Append(charBuffer, 0, charCount);
+
+                            for (int i = 0; i < charCount; i++)
                             {
-                                memoryStream.Write(buffer, 0, bytesRead);
-                            }
-                        }
-                        catch (IOException ex)
-                        {
-                            // TODO: Dirty dirty dirty
-                            SocketException sEx = ex.InnerException as SocketException;
-                            if (sEx == null || sEx.SocketErrorCode != SocketError.TimedOut)
-                                throw;
-                        }
+                                char c = charBuffer[i];
 
-                        responseMessage = _messageEncoding.GetString(memoryStream.ToArray());
+                                if (c == '{')
+                                    ++accoladeOpenCount;
+                                else if (c == '}')
+                                    ++accoladeCloseCount;
+                            }
+
+                            if (accoladeOpenCount > 0 && accoladeOpenCount == accoladeCloseCount)
+                                break;
+                        }
                     }
                 }
             }
@@ -235,6 +244,7 @@ namespace SyncingShip.Protocol
                     client.Close();
             }
 
+            string responseMessage = responseMessageBuilder.ToString();
             return responseMessage;
         }
 

@@ -77,42 +77,48 @@ namespace SyncingShip.Protocol
         private void HandleRequest(object parameter)
         {
             TcpClient client = (TcpClient)parameter;
-            client.ReceiveTimeout = 500; // TODO: Dirty workaround for not knowing the content byte length
 
             try
             {
                 using (NetworkStream stream = client.GetStream())
                 {
-                    string requestMessage;
+                    StringBuilder requestMessageBuilder = new StringBuilder();
 
-                    // Read the request
-                    using (MemoryStream memoryStream = new MemoryStream())
+                    Decoder charDecoder = _messageEncoding.GetDecoder();
+
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    char[] charBuffer = new char[buffer.Length];
+                    int accoladeOpenCount = 0;
+                    int accoladeCloseCount = 0;
+
+                    while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
                     {
-                        byte[] buffer = new byte[8192];
-                        int bytesRead;
+                        int charCount = charDecoder.GetChars(buffer, 0, bytesRead, charBuffer, 0);
 
-                        try
+                        if (charCount > 0)
                         {
-                            while ((bytesRead = stream.Read(buffer, 0, buffer.Length)) > 0)
-                            // THIS BLOCKS IF THERE IS NOTHING TO READ!!! We need to know the byte length of the content!
+                            requestMessageBuilder.Append(charBuffer, 0, charCount);
+
+                            for (int i = 0; i < charCount; i++)
                             {
-                                memoryStream.Write(buffer, 0, bytesRead);
-                            }
-                        }
-                        catch (IOException ex)
-                        {
-                            // TODO: Dirty dirty dirty
-                            SocketException sEx = ex.InnerException as SocketException;
-                            if (sEx == null || sEx.SocketErrorCode != SocketError.TimedOut)
-                                throw;
-                        }
+                                char c = charBuffer[i];
 
-                        requestMessage = _messageEncoding.GetString(memoryStream.ToArray());
+                                if (c == '{')
+                                    ++accoladeOpenCount;
+                                else if (c == '}')
+                                    ++accoladeCloseCount;
+                            }
+
+                            if (accoladeOpenCount > 0 && accoladeOpenCount == accoladeCloseCount)
+                                break;
+                        }
                     }
-                    
+
                     IResponseBody responseBody = null;
 
                     // Split the message into the header and body
+                    string requestMessage = requestMessageBuilder.ToString();
                     string[] requestMessageParts = requestMessage.Split(new[] { "\r\n\r\n" }, 2, StringSplitOptions.None);
 
                     // Validate the message: must have a header, header must match protocol specification
@@ -175,7 +181,11 @@ namespace SyncingShip.Protocol
                         {
                             status = result.StatusCode,
                             files = fileInfoList
-                                .Select(r => new ListResponseBody.File { filename = r.FileName, checksum = r.Checksum })
+                                .Select(r => new ListResponseBody.File
+                                {
+                                    filename = Convert.ToBase64String(_messageEncoding.GetBytes(r.FileName)),
+                                    checksum = r.Checksum
+                                })
                                 .ToArray()
                         };
                     }
@@ -184,13 +194,15 @@ namespace SyncingShip.Protocol
                     {
                         GetRequestBody getRequestBody = JsonConvert.DeserializeObject<GetRequestBody>(requestJson);
                         SyncFile file;
-                        SyncResult result = GetCallback.Invoke(getRequestBody.filename, out file);
+                        SyncResult result = GetCallback.Invoke(
+                            _messageEncoding.GetString(Convert.FromBase64String(getRequestBody.filename)),
+                            out file);
                         if (file == null || result.StatusCode != SyncStatusCode.Ok)
                             return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
                         return new GetResponseBody
                         {
                             status = result.StatusCode,
-                            filename = file.FileName,
+                            filename = Convert.ToBase64String(_messageEncoding.GetBytes(file.FileName)),
                             checksum = file.Checksum,
                             content = Convert.ToBase64String(file.Content)
                         };
@@ -201,7 +213,7 @@ namespace SyncingShip.Protocol
                         PutRequestBody putRequestBody = JsonConvert.DeserializeObject<PutRequestBody>(requestJson);
                         SyncFile file = new SyncFile
                         {
-                            FileName = putRequestBody.filename,
+                            FileName = _messageEncoding.GetString(Convert.FromBase64String(putRequestBody.filename)),
                             Content = Convert.FromBase64String(putRequestBody.content)
                         };
                         file.Checksum = ChecksumUtil.CreateChecksum(file.Content);
@@ -217,7 +229,9 @@ namespace SyncingShip.Protocol
                 case SyncVerbs.Delete:
                     {
                         DeleteRequestBody deleteRequestBody = JsonConvert.DeserializeObject<DeleteRequestBody>(requestJson);
-                        SyncResult result = DeleteCallback.Invoke(deleteRequestBody.filename, deleteRequestBody.checksum);
+                        SyncResult result = DeleteCallback.Invoke(
+                            _messageEncoding.GetString(Convert.FromBase64String(deleteRequestBody.filename)),
+                            deleteRequestBody.checksum);
                         if (result.StatusCode != SyncStatusCode.Ok)
                             return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
                         return new DeleteResponseBody

@@ -17,8 +17,13 @@ namespace SyncingShip.Shared
         public string CreateChecksum(string fileName)
         {
             string path = Path.Combine(_fileDirectory, fileName);
+            string checksum;
             using (FileStream fileStream = File.OpenRead(path))
-                return ChecksumUtil.CreateChecksum(fileStream);
+            {
+                checksum = ChecksumUtil.CreateChecksum(fileStream);
+                fileStream.Close();
+            }
+            return checksum;
         }
 
         public string GetChecksum(string fileName)
@@ -26,8 +31,13 @@ namespace SyncingShip.Shared
             string path = Path.Combine(_checksumDirectory, fileName + ".checksum");
             if (!File.Exists(path))
                 return null;
+            string checksum;
             using (StreamReader reader = new StreamReader(path))
-                return reader.ReadLine();
+            {
+                checksum = reader.ReadLine();
+                reader.Close();
+            }
+            return checksum;
         }
 
         public void SaveChecksum(string fileName, string checksum)
@@ -37,6 +47,7 @@ namespace SyncingShip.Shared
             {
                 writer.Write(checksum);
                 writer.Flush();
+                writer.Close();
             }
         }
 

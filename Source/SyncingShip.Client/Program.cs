@@ -23,6 +23,17 @@ namespace SyncingShip.Client
 
             bool canRun = true;
 
+            _log.Info("Performing initial synchronization.");
+
+            try
+            {
+                service.PerformSync();
+            }
+            catch (SyncException ex)
+            {
+                _log.Error("Sync error {0}", ex);
+            }
+
             _log.Info("Client started.\r\nType 'list' to see all files and their statuses.\r\nType 'sync' to force synchronization.");
 
             while (canRun)

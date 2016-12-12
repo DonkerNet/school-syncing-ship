@@ -1,5 +1,4 @@
 ﻿using System.Collections.Generic;
-using System.Configuration;
 using System.IO;
 
 namespace SyncingShip.Shared
@@ -29,6 +28,8 @@ namespace SyncingShip.Shared
                     fileStream.CopyTo(memoryStream);
                     bytes = memoryStream.ToArray();
                 }
+
+                fileStream.Close();
             }
             return bytes;
         }
@@ -43,6 +44,7 @@ namespace SyncingShip.Shared
                 fileStream.SetLength(0);
                 fileStream.Write(content, 0, content.Length);
                 fileStream.Flush();
+                fileStream.Close();
             }
         }
 
