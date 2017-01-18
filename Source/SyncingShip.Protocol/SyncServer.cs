@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Sockets;
@@ -134,7 +133,16 @@ namespace SyncingShip.Protocol
                             bool isValidProtocol = SyncConstants.ProtocolVersion.Equals(protocolVersion, StringComparison.OrdinalIgnoreCase);
 
                             if (isValidProtocol)
-                                responseBody = ProcessRequest(verb, requestMessageParts.Length >= 2 ? requestMessageParts[1] : null);
+                            {
+                                try
+                                {
+                                    responseBody = ProcessRequest(verb, requestMessageParts.Length >= 2 ? requestMessageParts[1] : null);
+                                }
+                                catch (Exception)
+                                {
+                                    responseBody = new ErrorResponseBody { status = SyncStatusCode.InternalServerError };
+                                }
+                            }
                         }
                     }
 

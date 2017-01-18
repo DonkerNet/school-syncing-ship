@@ -7,5 +7,6 @@
         NotFound = 404,
         FileConflict = 412,
         //RequestEntityTooLarge = 413,
+        InternalServerError = 500
     }
 }
