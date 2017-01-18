@@ -1,8 +1,6 @@
 ﻿using System.Collections.Generic;
-using System.Configuration;
 using System.IO;
 using System.Linq;
-using System.Net;
 using System.Text;
 using log4net;
 using SyncingShip.Client.Entities;
@@ -44,9 +42,7 @@ namespace SyncingShip.Client
         private void FileSystemWatcherOnChange(object sender, FileSystemEventArgs args)
         {
             _log.Info("Change in file directory detected.");
-            _fileSystemWatcher.EnableRaisingEvents = false;
             PerformSync();
-            _fileSystemWatcher.EnableRaisingEvents = true;
         }
 
         public void ShowList()
@@ -117,6 +113,9 @@ namespace SyncingShip.Client
         public void PerformSync()
         {
             _log.Info("File syncing started.");
+
+            // Stop file watching during sync
+            _fileSystemWatcher.EnableRaisingEvents = false;
 
             SortedFileInfoList sortedFileInfoList = GetSortedFileInfoList();
 
@@ -205,6 +204,9 @@ namespace SyncingShip.Client
                     _checksumManager.SaveChecksum(fileInfo.FileName, fileInfo.Checksum);
                 }
             }
+
+            // Start file watching again
+            _fileSystemWatcher.EnableRaisingEvents = false;
 
             _log.Info("File syncing finished.");
         }

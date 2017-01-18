@@ -37,6 +37,9 @@ namespace SyncingShip.Server
                         case "exit":
                             canRun = false;
                             break;
+                        default:
+                            _log.Error("Huh?");
+                            break;
                     }
                 }
 
