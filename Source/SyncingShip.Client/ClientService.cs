@@ -206,7 +206,7 @@ namespace SyncingShip.Client
             }
 
             // Start file watching again
-            _fileSystemWatcher.EnableRaisingEvents = false;
+            _fileSystemWatcher.EnableRaisingEvents = true;
 
             _log.Info("File syncing finished.");
         }

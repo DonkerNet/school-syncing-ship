@@ -31,7 +31,6 @@ namespace SyncingShip.Protocol
 
         public SyncServer(int listeningPort)
         {
-            ServicePointManager.ServerCertificateValidationCallback = null;
             _listeningPort = listeningPort;
             _messageEncoding = Encoding.GetEncoding(SyncConstants.MessageEncoding);
         }
@@ -180,76 +179,214 @@ namespace SyncingShip.Protocol
             switch (verb)
             {
                 case SyncVerbs.List:
-                    {
-                        ICollection<SyncFileInfo> fileInfoList;
-                        SyncResult result = ListCallback.Invoke(out fileInfoList);
-                        if (fileInfoList == null || result.StatusCode != SyncStatusCode.Ok)
-                            return new ErrorResponseBody { status = result.StatusCode, message = result .Message};
-                        return new ListResponseBody
-                        {
-                            status = result.StatusCode,
-                            files = fileInfoList
-                                .Select(r => new ListResponseBody.File
-                                {
-                                    filename = Convert.ToBase64String(_messageEncoding.GetBytes(r.FileName)),
-                                    checksum = r.Checksum
-                                })
-                                .ToArray()
-                        };
-                    }
+                    return ProcessListCommand();
 
                 case SyncVerbs.Get:
-                    {
-                        GetRequestBody getRequestBody = JsonConvert.DeserializeObject<GetRequestBody>(requestJson);
-                        SyncFile file;
-                        SyncResult result = GetCallback.Invoke(
-                            _messageEncoding.GetString(Convert.FromBase64String(getRequestBody.filename)),
-                            out file);
-                        if (file == null || result.StatusCode != SyncStatusCode.Ok)
-                            return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
-                        return new GetResponseBody
-                        {
-                            status = result.StatusCode,
-                            filename = Convert.ToBase64String(_messageEncoding.GetBytes(file.FileName)),
-                            checksum = file.Checksum,
-                            content = Convert.ToBase64String(file.Content)
-                        };
-                    }
+                    return ProcessGetCommand(requestJson);
 
                 case SyncVerbs.Put:
-                    {
-                        PutRequestBody putRequestBody = JsonConvert.DeserializeObject<PutRequestBody>(requestJson);
-                        SyncFile file = new SyncFile
-                        {
-                            FileName = _messageEncoding.GetString(Convert.FromBase64String(putRequestBody.filename)),
-                            Content = Convert.FromBase64String(putRequestBody.content)
-                        };
-                        file.Checksum = ChecksumUtil.CreateChecksum(file.Content);
-                        SyncResult result = PutCallback.Invoke(putRequestBody.original_checksum, file);
-                        if (result.StatusCode != SyncStatusCode.Ok)
-                            return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
-                        return new PutResponseBody
-                        {
-                            status = result.StatusCode
-                        };
-                    }
+                    return ProcessPutCommand(requestJson);
 
                 case SyncVerbs.Delete:
-                    {
-                        DeleteRequestBody deleteRequestBody = JsonConvert.DeserializeObject<DeleteRequestBody>(requestJson);
-                        SyncResult result = DeleteCallback.Invoke(
-                            _messageEncoding.GetString(Convert.FromBase64String(deleteRequestBody.filename)),
-                            deleteRequestBody.checksum);
-                        if (result.StatusCode != SyncStatusCode.Ok)
-                            return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
-                        return new DeleteResponseBody
-                        {
-                            status = result.StatusCode
-                        };
-                    }
+                    return ProcessDeleteCommand(requestJson);
             }
 
             return null;
+        }
+
+        private IResponseBody ProcessListCommand()
+        {
+            ICollection<SyncFileInfo> fileInfoList;
+
+            SyncResult result = ListCallback.Invoke(out fileInfoList);
+
+            if (fileInfoList == null || result.StatusCode != SyncStatusCode.Ok)
+                return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
+
+            return new ListResponseBody
+            {
+                status = result.StatusCode,
+                files = fileInfoList
+                    .Select(r => new ListResponseBody.File
+                    {
+                        filename = Convert.ToBase64String(_messageEncoding.GetBytes(r.FileName)),
+                        checksum = r.Checksum
+                    })
+                    .ToArray()
+            };
+        }
+
+        private IResponseBody ProcessGetCommand(string requestJson)
+        {
+            // Parse JSON
+
+            GetRequestBody getRequestBody = null;
+
+            try
+            {
+                getRequestBody = JsonConvert.DeserializeObject<GetRequestBody>(requestJson);
+            }
+            catch { }
+
+            if (getRequestBody == null)
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid JSON." };
+
+            // Parse filename
+
+            string fileName = null;
+
+            if (!string.IsNullOrEmpty(getRequestBody.filename))
+            {
+                try
+                {
+                    fileName = _messageEncoding.GetString(Convert.FromBase64String(getRequestBody.filename));
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrEmpty(fileName))
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid base64 filename." };
+
+            // Invoke callback method
+
+            SyncFile file;
+
+            SyncResult result = GetCallback.Invoke(fileName, out file);
+
+            if (file == null || result.StatusCode != SyncStatusCode.Ok)
+                return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
+
+            return new GetResponseBody
+            {
+                status = result.StatusCode,
+                filename = Convert.ToBase64String(_messageEncoding.GetBytes(file.FileName)),
+                checksum = file.Checksum,
+                content = Convert.ToBase64String(file.Content)
+            };
+        }
+
+        private IResponseBody ProcessPutCommand(string requestJson)
+        {
+            // Parse JSON
+
+            if (string.IsNullOrEmpty(requestJson))
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Missing JSON." };
+
+            PutRequestBody putRequestBody = null;
+
+            try
+            {
+                putRequestBody = JsonConvert.DeserializeObject<PutRequestBody>(requestJson);
+            }
+            catch { }
+
+            if (putRequestBody == null)
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid JSON." };
+
+            // Parse filename
+
+            string fileName;
+
+            if (string.IsNullOrEmpty(putRequestBody.filename))
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Missing base64 filename." };
+
+            try
+            {
+                fileName = _messageEncoding.GetString(Convert.FromBase64String(putRequestBody.filename));
+            }
+            catch
+            {
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid base64 filename." };
+            }
+
+            // Parse content
+
+            byte[] content;
+
+            if (string.IsNullOrEmpty(putRequestBody.content))
+            {
+                content = new byte[0];
+            }
+            else
+            {
+                try
+                {
+                    content = Convert.FromBase64String(putRequestBody.content);
+                }
+                catch (Exception)
+                {
+                    return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid base64 content." };
+                }
+            }
+
+            // Create file object and invoke callback method
+
+            SyncFile file = new SyncFile
+            {
+                FileName = fileName,
+                Content = content
+            };
+
+            file.Checksum = ChecksumUtil.CreateChecksum(file.Content);
+
+            SyncResult result = PutCallback.Invoke(putRequestBody.original_checksum, file);
+
+            if (result.StatusCode != SyncStatusCode.Ok)
+                return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
+
+            return new PutResponseBody
+            {
+                status = result.StatusCode
+            };
+        }
+
+        private IResponseBody ProcessDeleteCommand(string requestJson)
+        {
+            // Parse JSON
+
+            DeleteRequestBody deleteRequestBody = null;
+
+            try
+            {
+                deleteRequestBody = JsonConvert.DeserializeObject<DeleteRequestBody>(requestJson);
+            }
+            catch { }
+
+            if (deleteRequestBody == null)
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid JSON." };
+
+            // Parse filename
+
+            string fileName = null;
+
+            if (!string.IsNullOrEmpty(deleteRequestBody.filename))
+            {
+                try
+                {
+                    fileName = _messageEncoding.GetString(Convert.FromBase64String(deleteRequestBody.filename));
+                }
+                catch { }
+            }
+
+            if (string.IsNullOrEmpty(fileName))
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid base64 filename." };
+
+            // Validate checksum
+
+            if (string.IsNullOrEmpty(deleteRequestBody.checksum))
+                return new ErrorResponseBody { status = SyncStatusCode.BadRequest, message = "Invalid checksum." };
+
+            // Invoke callback method
+
+            SyncResult result = DeleteCallback.Invoke(fileName, deleteRequestBody.checksum);
+
+            if (result.StatusCode != SyncStatusCode.Ok)
+                return new ErrorResponseBody { status = result.StatusCode, message = result.Message };
+
+            return new DeleteResponseBody
+            {
+                status = result.StatusCode
+            };
         }
 
         public enum ServerStatus
